@@ -1,0 +1,4 @@
+erlide
+======
+
+Erlang GUI IDE
