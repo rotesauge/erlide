@@ -1,0 +1,1 @@
+werl -pa ebin deps/*/ebin -eval application:start(erlide)
