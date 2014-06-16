@@ -10,31 +10,15 @@
 -author("redeye").
 -behaviour(wx_object).
 -include_lib("wx/include/wx.hrl").
-
+-include_lib("erlide.hrl").
 
 -export([start/0, start/1, start_link/0, start_link/1, format/3,
   init/1, terminate/2, code_change/3,
   handle_info/2, handle_call/3, handle_cast/2, handle_event/2, say/2]).
 
 
--record(state, {win, demo, example, selector, log, code, curfile}).
 
 %% For wx-2.9 usage
--ifndef(wxSTC_ERLANG_COMMENT_FUNCTION).
--define(wxSTC_ERLANG_COMMENT_FUNCTION, 14).
--define(wxSTC_ERLANG_COMMENT_MODULE, 15).
--define(wxSTC_ERLANG_COMMENT_DOC, 16).
--define(wxSTC_ERLANG_COMMENT_DOC_MACRO, 17).
--define(wxSTC_ERLANG_ATOM_QUOTED, 18).
--define(wxSTC_ERLANG_MACRO_QUOTED, 19).
--define(wxSTC_ERLANG_RECORD_QUOTED, 20).
--define(wxSTC_ERLANG_NODE_NAME_QUOTED, 21).
--define(wxSTC_ERLANG_BIFS, 22).
--define(wxSTC_ERLANG_MODULES, 23).
--define(wxSTC_ERLANG_MODULES_ATT, 24).
--endif.
-
--define(stc, wxStyledTextCtrl).
 
 start() ->
   start([]).
@@ -53,12 +37,11 @@ format(Config, Str, Args) ->
   wxTextCtrl:appendText(Log, io_lib:format(Str, Args)),
   ok.
 
--define(LOADFILE, 101).
--define(SAVEFILE, 102).
--define(DEBUG_TRACE, 103).
--define(DEBUG_DRIVER, 104).
 
 init(Options) ->
+  App = application:get_application(),
+  io:format("~p~n",[App]),
+  Table = init_ets(),
   wx:new(Options),
   process_flag(trap_exit, true),
   Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Erlang IDE", [{size, {1000, 500}}]),
@@ -81,10 +64,15 @@ init(Options) ->
   wxFrame:connect(Frame, command_menu_selected),
   wxFrame:connect(Frame, close_window),
   _SB = wxFrame:createStatusBar(Frame, []),
-  Code = code_area(Frame),
+
+  Files = wxNotebook:new(Frame, 1, [{style, ?wxBK_DEFAULT}]),
+  Code = code_area(Files),
+  wxNotebook:addPage(Files, Code, "NewFile", []),
+
   wxFrame:show(Frame),
+
 %%   load_code(Code, {ok, <<"-module(erlide_app).\n-author(\"redeye\").\n-behaviour(application).\n%% Application callbacks\n-export([start/2,stop/1]).">>}),
-  State = #state{win = Frame, code = Code},
+  State = #state{win = Frame,table = Table, code = Code},
   io:format("5 ~n"),
   {Frame, State}.
 
@@ -120,8 +108,6 @@ handle_event(#wx{id = Id,
         undefined -> {noreply, State};
         NotEmpty ->
           TEXT = wxStyledTextCtrl:getText(Code),
-        % say(Panel,TEXT),
-        %  say(Panel,NotEmpty),
           file:write_file(NotEmpty, unicode:characters_to_binary(TEXT)),
           {noreply, State}
       end;
@@ -130,6 +116,7 @@ handle_event(#wx{id = Id,
       case wxFileDialog:showModal(Dialog) of
         ?wxID_OK ->
           FName = wxFileDialog:getPath(Dialog),
+          add_new_file(FName),
           load_code(Code, file:read_file(FName)),
           wxFileDialog:destroy(Dialog),
           {noreply, State#state{code = Code, curfile = FName}};
@@ -183,6 +170,18 @@ terminate(_Reason, _State = #state{win = Frame}) ->
   wxFrame:destroy(Frame),
   wx:destroy().
 
+init_ets()->
+  {ok,OpenFiles}   = application:get_env(openfiles),
+  {ok,Colorscheme} = application:get_env(colorscheme),
+  Table=ets:new(options,[set, protected, {keypos,1}]),
+  true=ets:insert_new(Table, {1,OpenFiles,Colorscheme}),
+  Table.
+
+add_new_file(Fname)->
+  {1,ListOld,Colorscheme} = ets:lookup(options,1),
+  Newlist=lists:append([ListOld,[Fname]]),
+  ets:insert_new(options, {1,Newlist,Colorscheme}).
+
 
 code_area(Parent) ->
   FixedFont = wxFont:new(10, ?wxFONTFAMILY_TELETYPE, ?wxNORMAL, ?wxNORMAL, []),
@@ -191,10 +190,10 @@ code_area(Parent) ->
   ?stc:styleClearAll(Ed),
   ?stc:styleSetFont(Ed, ?wxSTC_STYLE_DEFAULT, FixedFont),
   ?stc:setLexer(Ed, ?wxSTC_LEX_ERLANG),
-  ?stc:setMarginType(Ed, 0, ?wxSTC_MARGIN_NUMBER),
+  ?stc:setMarginType(Ed, 1, ?wxSTC_MARGIN_NUMBER),
   LW = ?stc:textWidth(Ed, ?wxSTC_STYLE_LINENUMBER, "9"),
   ?stc:setMarginWidth(Ed, 0, LW),
-  ?stc:setMarginWidth(Ed, 1, 0),
+  ?stc:setMarginWidth(Ed, 2, 0),
 
   ?stc:setSelectionMode(Ed, ?wxSTC_SEL_LINES),
   %%?stc:hideSelection(Ed, true),

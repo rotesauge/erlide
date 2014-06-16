@@ -8,5 +8,6 @@
       stdlib
     ]},
     {mod, {erlide_app, []}},
-    {env, []}
+    {env, [{openfiles,[]},
+      {colorscheme,[]}]}
   ]}.

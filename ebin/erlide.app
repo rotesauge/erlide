@@ -4,5 +4,5 @@
               {registered,[]},
               {applications,[kernel,stdlib]},
               {mod,{erlide_app,[]}},
-              {env,[]},
+              {env,[{openfiles,[]},{colorscheme,[]}]},
               {modules,[erlide_app,redactor]}]}.
