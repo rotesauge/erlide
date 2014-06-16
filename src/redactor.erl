@@ -14,7 +14,7 @@
 
 -export([start/0, start/1, start_link/0, start_link/1, format/3,
   init/1, terminate/2, code_change/3,
-  handle_info/2, handle_call/3, handle_cast/2, handle_event/2]).
+  handle_info/2, handle_call/3, handle_cast/2, handle_event/2, say/2]).
 
 
 -record(state, {win, demo, example, selector, log, code, curfile}).
@@ -83,7 +83,7 @@ init(Options) ->
   _SB = wxFrame:createStatusBar(Frame, []),
   Code = code_area(Frame),
   wxFrame:show(Frame),
-  load_code(Code, {ok, <<"-module(erlide_app).\n-author(\"redeye\").\n-behaviour(application).\n%% Application callbacks\n-export([start/2,stop/1]).">>}),
+%%   load_code(Code, {ok, <<"-module(erlide_app).\n-author(\"redeye\").\n-behaviour(application).\n%% Application callbacks\n-export([start/2,stop/1]).">>}),
   State = #state{win = Frame, code = Code},
   io:format("5 ~n"),
   {Frame, State}.
@@ -113,15 +113,17 @@ handle_cast(Msg, State) ->
 %% Async Events are handled in handle_event as in handle_info
 handle_event(#wx{id = Id,
   event = #wxCommand{type = command_menu_selected}},
-    State = #state{win=Panel,code = Code,curfile = FileName}) ->
+    State = #state{win = Panel, code = Code, curfile = FileName}) ->
   case Id of
     ?SAVEFILE ->
       case FileName of
-       undefined->{noreply, State};
-       NotEmpty ->
-         io:format("file ~p~n", [NotEmpty]),
-         file:write(NotEmpty,wxStyledTextCtrl:getTextRaw(Code)),
-         {noreply, State}
+        undefined -> {noreply, State};
+        NotEmpty ->
+          TEXT = wxStyledTextCtrl:getText(Code),
+        % say(Panel,TEXT),
+        %  say(Panel,NotEmpty),
+          file:write_file(NotEmpty, unicode:characters_to_binary(TEXT)),
+          {noreply, State}
       end;
     ?LOADFILE ->
       Dialog = apply(wxFileDialog, new, [Panel, []]),
@@ -130,7 +132,7 @@ handle_event(#wx{id = Id,
           FName = wxFileDialog:getPath(Dialog),
           load_code(Code, file:read_file(FName)),
           wxFileDialog:destroy(Dialog),
-          {noreply, State#state{curfile = FName}};
+          {noreply, State#state{code = Code, curfile = FName}};
         _Any ->
           wxFileDialog:destroy(Dialog),
           {noreply, State}
@@ -256,3 +258,16 @@ keyWords() ->
     "end", "fun", "if", "let", "of", "query", "receive", "when", "bnot", "not",
     "div", "rem", "band", "and", "bor", "bxor", "bsl", "bsr", "or", "xor"],
   lists:flatten([K ++ " " || K <- L] ++ [0]).
+
+%% status(Frame, Format, Data) -> ok = wxFrame:setStatusText(Frame, Format, Data).
+
+say(Frame, Message) ->
+  Dialog = apply(wxMessageDialog, new, [Frame, force:to_list(Message)]),
+  case wxMessageDialog:showModal(Dialog) of
+    ?wxID_OK ->
+      wxMessageDialog:destroy(Dialog),
+      ok;
+    _Any ->
+      wxMessageDialog:destroy(Dialog),
+      cancel
+  end.

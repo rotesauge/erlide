@@ -5,4 +5,4 @@
               {applications,[kernel,stdlib]},
               {mod,{erlide_app,[]}},
               {env,[]},
-              {modules,[erlide_app,erlide_sup,redactor,redactor_demo]}]}.
+              {modules,[erlide_app,redactor]}]}.
