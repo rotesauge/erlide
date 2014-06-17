@@ -30,5 +30,7 @@
 
 -define(stc, wxStyledTextCtrl).
 
--record(state, {win, table, example, selector, log, code, curfile}).
+-record(state, {id, win, tabs, curfile, curcode}).
+
+-record(code_tab, {code, curfile}).
 

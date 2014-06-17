@@ -41,7 +41,7 @@ format(Config, Str, Args) ->
 init(Options) ->
   App = application:get_application(),
   io:format("~p~n",[App]),
-  Table = init_ets(),
+  init_ets(),
   wx:new(Options),
   process_flag(trap_exit, true),
   Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Erlang IDE", [{size, {1000, 500}}]),
@@ -60,20 +60,16 @@ init(Options) ->
   wxMenuBar:append(MB, File, "&File"),
   wxMenuBar:append(MB, Help, "&Help"),
   wxFrame:setMenuBar(Frame, MB),
-
   wxFrame:connect(Frame, command_menu_selected),
   wxFrame:connect(Frame, close_window),
   _SB = wxFrame:createStatusBar(Frame, []),
-
   Files = wxNotebook:new(Frame, 1, [{style, ?wxBK_DEFAULT}]),
-  Code = code_area(Files),
-  wxNotebook:addPage(Files, Code, "NewFile", []),
-
+  ets:insert(ide_state, #state{id = 1, win= Frame, tabs=Files}),
   wxFrame:show(Frame),
-
+  %**********
+  State=first_load(),
+  %**********
 %%   load_code(Code, {ok, <<"-module(erlide_app).\n-author(\"redeye\").\n-behaviour(application).\n%% Application callbacks\n-export([start/2,stop/1]).">>}),
-  State = #state{win = Frame,table = Table, code = Code},
-  io:format("5 ~n"),
   {Frame, State}.
 
 %%%%%%%%%%%%
@@ -99,9 +95,13 @@ handle_cast(Msg, State) ->
   {noreply, State}.
 
 %% Async Events are handled in handle_event as in handle_info
-handle_event(#wx{id = Id,
-  event = #wxCommand{type = command_menu_selected}},
-    State = #state{win = Panel, code = Code, curfile = FileName}) ->
+handle_event(#wx{event = #wxNotebook{type = command_notebook_page_changed}}, State = #state{tabs = Notebook}) ->
+  Selection = wxNotebook:getSelection(Notebook),
+  Title = wxNotebook:getPageText(Notebook, Selection),
+  Newstate = State#state{curcode = Selection, curfile = Title},
+  ets:insert(ide_state,Newstate),
+  {noreply,Newstate};
+handle_event(#wx{id = Id, event = #wxCommand{type = command_menu_selected}}, State = #state{win = Panel, curcode = Code, curfile = FileName}) ->
   case Id of
     ?SAVEFILE ->
       case FileName of
@@ -116,23 +116,14 @@ handle_event(#wx{id = Id,
       case wxFileDialog:showModal(Dialog) of
         ?wxID_OK ->
           FName = wxFileDialog:getPath(Dialog),
-          add_new_file(FName),
-          load_code(Code, file:read_file(FName)),
+          Newstate=add_new_file(FName),
           wxFileDialog:destroy(Dialog),
-          {noreply, State#state{code = Code, curfile = FName}};
+          {noreply, Newstate};
         _Any ->
           wxFileDialog:destroy(Dialog),
           {noreply, State}
       end;
     ?wxID_PRINT ->
-%% If you are going to printout mainly text it is easier if
-%% you generate HTML code and use a wxHtmlEasyPrint
-%% instead of using DCs
-      Module = "ex_" ++ wxListBox:getStringSelection(State#state.selector) ++ ".erl",
-      HEP = wxHtmlEasyPrinting:new([{name, "Print"},
-        {parentWindow, State#state.win}]),
-      Html = demo_html_tagger:erl2htmltext(Module),
-      wxHtmlEasyPrinting:previewText(HEP, Html),
       {noreply, State};
     ?wxID_HELP ->
       wx_misc:launchDefaultBrowser("http://www.erlang.org/doc/apps/wx/part_frame.html"),
@@ -149,13 +140,11 @@ handle_event(#wx{id = Id,
           {caption, "About"}])),
       {noreply, State};
     ?wxID_EXIT ->
-      wx_object:call(State#state.example, shutdown),
       {stop, normal, State};
     _ ->
       {noreply, State}
   end;
 handle_event(#wx{event = #wxClose{}}, State = #state{win = Frame}) ->
-  io:format("~p Closing window ~n", [self()]),
   ok = wxFrame:setStatusText(Frame, "Closing...", []),
   {stop, normal, State};
 handle_event(Ev, State) ->
@@ -166,21 +155,43 @@ code_change(_, _, State) ->
   {stop, not_yet_implemented, State}.
 
 terminate(_Reason, _State = #state{win = Frame}) ->
-  %catch wx_object:call(State#state.example, shutdown),
+  %application:set_env(),
   wxFrame:destroy(Frame),
   wx:destroy().
 
 init_ets()->
-  {ok,OpenFiles}   = application:get_env(openfiles),
   {ok,Colorscheme} = application:get_env(colorscheme),
-  Table=ets:new(options,[set, protected, {keypos,1}]),
-  true=ets:insert_new(Table, {1,OpenFiles,Colorscheme}),
-  Table.
+  ets:new(ide_opts,[set, public, named_table,{keypos,1}]),
+  ets:new(tabs,[set, public, named_table,{keypos, #code_tab.code}]),
+  ets:new(ide_state,[set, public, named_table,{keypos, #state.id}]),
+  ets:insert(ide_opts, {1,Colorscheme}),
+  ok.
+
+first_load()->
+  {ok,OpenFiles}   = application:get_env(openfiles),
+  case OpenFiles of
+    []  ->
+      State=add_new_file("NewFile.erl"),
+      State;
+    [H|T]->
+      State=add_new_file(H),
+      [add_new_file(F)||F<-T],
+      State
+  end.
 
 add_new_file(Fname)->
-  {1,ListOld,Colorscheme} = ets:lookup(options,1),
-  Newlist=lists:append([ListOld,[Fname]]),
-  ets:insert_new(options, {1,Newlist,Colorscheme}).
+  [{_,ID, Frame, Files, _Curfile, _Curcode}]=ets:lookup(ide_state, 1),
+  Code = code_area(Files),
+  wxNotebook:addPage(Files, Code, force:to_list(Fname), []),
+  %************
+  case file:read_file(Fname) of
+    {ok, Text} -> load_code(Code, {ok, Text});
+    _Ot        -> io:format("it is ~p  ~n", [_Ot])
+  end,
+  %*************
+  ets:insert(tabs, #code_tab{code = Code, curfile = Fname}),
+  State = #state{id = ID, win= Frame, tabs=Files, curfile = Fname, curcode = Code},
+  State.
 
 
 code_area(Parent) ->
