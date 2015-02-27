@@ -41,7 +41,6 @@ format(Config, Str, Args) ->
 init(Options) ->
   App = application:get_application(),
   io:format("~p~n",[App]),
-  init_ets(),
   wx:new(Options),
   process_flag(trap_exit, true),
   Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Erlang IDE", [{size, {1000, 500}}]),
@@ -64,7 +63,6 @@ init(Options) ->
   wxFrame:connect(Frame, close_window),
   _SB = wxFrame:createStatusBar(Frame, []),
   Files = wxNotebook:new(Frame, 1, [{style, ?wxBK_DEFAULT}]),
-  ets:insert(ide_state, #state{id = 1, win= Frame, tabs=Files}),
   wxFrame:show(Frame),
   %**********
   State=first_load(),
@@ -159,13 +157,6 @@ terminate(_Reason, _State = #state{win = Frame}) ->
   wxFrame:destroy(Frame),
   wx:destroy().
 
-init_ets()->
-  {ok,Colorscheme} = application:get_env(colorscheme),
-  ets:new(ide_opts,[set, public, named_table,{keypos,1}]),
-  ets:new(tabs,[set, public, named_table,{keypos, #code_tab.code}]),
-  ets:new(ide_state,[set, public, named_table,{keypos, #state.id}]),
-  ets:insert(ide_opts, {1,Colorscheme}),
-  ok.
 
 first_load()->
   {ok,OpenFiles}   = application:get_env(openfiles),

@@ -1,0 +1,1 @@
+rebar compile > log1.log
