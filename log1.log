@@ -1,4 +1,4 @@
 ==> erlide (compile)
-src/redactor.erl:457: Warning: function unload_code/1 is unused
-src/redactor.erl:463: Warning: function find/1 is unused
+src/redactor.erl:461: Warning: function unload_code/1 is unused
+src/redactor.erl:467: Warning: function find/1 is unused
 Compiled src/redactor.erl

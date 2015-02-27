@@ -377,10 +377,14 @@ first_load(Notebook)->
 add_new_file(Notebook,Fname)->
   ForcedFname = force:to_list(Fname),
   Tab = wxPanel:new(Notebook, []),
+   MainSizer = wxBoxSizer:new(?wxVERTICAL),
+   wxPanel:setSizer(Tab, MainSizer),
   Code = code_area(Tab),
-  MainSizer = wxBoxSizer:new(?wxVERTICAL),
-  wxPanel:setSizer(Tab, MainSizer),
+%%  // Sizer3 = wxStaticBoxSizer:new(?wxVERTICAL, Tab,[]),
+%%  //wxSizer:add(Sizer3, Code, [{flag, ?wxEXPAND}, {proportion, 1}]),
+  wxSizer:add(MainSizer, Code, [{flag, ?wxEXPAND}, {proportion, 1}]),
   wxAuiNotebook:addPage(Notebook, Tab,ForcedFname, [{select, true}]),
+   wxPanel:setSizer(Tab, MainSizer),
   case file:read_file(Fname) of
     {ok, Text} ->
       load_code(Code, {ok, Text}),
