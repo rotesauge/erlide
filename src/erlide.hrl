@@ -23,14 +23,18 @@
 -define(wxSTC_ERLANG_MODULES_ATT, 24).
 -endif.
 
--define(LOADFILE, 101).
--define(SAVEFILE, 102).
+-define(DEBUG_NONE, 101).
+-define(DEBUG_VERBOSE, 102).
 -define(DEBUG_TRACE, 103).
 -define(DEBUG_DRIVER, 104).
-
+-define(CLOSEFILE, 105).
+-define(SAVEFILE, 106).
+-define(LOADFILE, 107).
+-define(NEWFILE, 108).
 -define(stc, wxStyledTextCtrl).
+-define(pi, wxAuiPaneInfo).
 
--record(state, {id, win, tabs, curfile, curcode}).
+-record(state, {id, win, tabs, curfile, curcode,mainwindow,mainpanel,aui,files,curent_tab,notebook,selection}).
 
--record(code_tab, {code, curfile}).
+-record(code_tab, {tab, code, file}).
 
